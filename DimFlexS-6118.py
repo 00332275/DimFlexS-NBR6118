@@ -102,7 +102,6 @@ Maxd = -1.E4
 #"""
 ################################################
 # cálculo das const. a1 e a2 para diag. par-retangulo
-# verificar se tal procedimento pode ser feito
 fcd = fck/gamac
 cc  = 210000/Es
 fck = fck*cc
