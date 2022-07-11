@@ -236,7 +236,7 @@ def esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, 
     #print(Mrx2, Nr2)
     #print(Mrxas, Nras)
     #print (Mrxd, Nrd)
-    print(epsS, epsI)
+    #print(epsS, epsI)
     return (Mrxd, Nrd)
 #############################
 
