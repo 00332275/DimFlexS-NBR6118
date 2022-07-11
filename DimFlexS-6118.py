@@ -4,7 +4,7 @@ Programa para verificação de seções de concreto armado submetidas à flexão
 simples segundo a NBR-6118:2014, voltado inicialmente à seções retangulares.
 
 @author: GabrielMachado
-Last-Modified: 02/07/2022
+Last-Modified: 10/07/2022
 """
 
 import numpy as np
@@ -175,52 +175,6 @@ xs = xs - xg
 ys = ys - yg
 
 ###################################################
-"""
-def nlsistema(var, xc, yc):
-    (X, lamb) = var
-    f = lamb*(Mrxd) - Maxd
-    h = lamb*(Nrd) - Nrd
-    return[f,g]
-
-s0 = np.array[(X, 1)]
-s  = fsolve(nlsistema,s0)
-print(s)
-"""
-
-
-    
-"""    
-def nlsistema(variaveis): # sistema que queremos resolver 
-    (x,y) = variaveis     # variáveis do sistema
-    eq1 = x * y - 2 * y - 2**x # equação 1
-    eq2 = np.log(x)-y-np.cos(x)# equação 2
-    return [eq1,eq2]
-
-s0 = np.array([1,1])      # estimativa inicial
-s = fsolve(nlsistema,s0)  # chamada de fsolve
-print(s)
-"""
-
-"""
-Primeira etapa: 
-    - estabelecer a função que criará os arrays xx1, yy1 e xx2, yy2, que correspondem
-    às coordenadas dos vértices das regiões 1 e 2 da seção.
-    - as variaveis de entrada são X (altura da LN), arrays xc e yc
-
-Segunda etapa:
-    - subrotina ESFOR para o cálculo dos esforços resistentes MRxd (MRx1+MRx2+MRaco) e NRd(NR1+NR2+NRaco)
-    - Esta subrotina se dividirá em 3 funções: REG1, REG2 e ACO
-        - REG1: calculará MRx1 e NR1 a partir de sigmacd,D0,D1,D2,G01,G02,G03 e G00 (yc,yg,epsilon_s(X) e epsilon_i(X))
-        - REG2: calculará MRx2 e NR2 a partir de sigmacd,G01 e G00
-        - ACO: calculará as parcelas correspondentes ao aço, usando rho_j(% de área da barra), As, sigma_sj, e ys_j
-"""
-
-# variáveis de entrada
-# X,yc,ys,epscu,epsc2,h,a1,a2
-# variáveis de saída
-# xx1,xx2,yy1,yy2,epsS,epsI,D0,D1,D2
-
-
 
 #############################
 """
@@ -441,7 +395,7 @@ def nlsistema(var, *var_aux):
     fcd   = const[4]
     fyk   = const[5]
     gamas = const[6]
-    Ly     = const[7]
+    Ly    = const[7]
     Maxd  = const[8]
     Nad   = const[9]
     Mrxd, Nrd = esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, yg, ys)
@@ -449,8 +403,8 @@ def nlsistema(var, *var_aux):
     g = lamb*(Nrd) - Nad
     return[f,g]
 const = np.array([As, a1, a2, Es, fcd, fyk, gamas, Ly, Maxd, Nad])
-lambi = 0.5
-Xi = 0 #altura da LN
+lambi = 0.5 #lambda inicial
+Xi = 0 #altura da LN inicial
 s0 = np.array([Xi, lambi])
 var_aux = (const, epscu, epsc2, rj, xc, xg, yc, yg, ys)
 s  = fsolve(nlsistema, s0, var_aux)
