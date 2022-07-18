@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Programa para verificação de seções de concreto armado submetidas à flexão
-simples segundo a NBR-6118:2014, voltado inicialmente à seções retangulares.
+Programa para verificação de seções poligonais de concreto armado submetidas 
+à flexão composta normal segundo a NBR-6118:2014.
 
 @author: GabrielMachado
-Last-Modified: 10/07/2022
+Last-Modified: 17/07/2022
 """
 
 import numpy as np
 import pandas as pd
-# import matplotlib.pyplot as plt
 # Para resolver o sistema de eq. não lineares
 from scipy.optimize import fsolve
-#import copy
+import xlsxwriter
+from datetime import datetime
+
 
 # Entrada de dados
 #
@@ -44,62 +45,8 @@ gamas = np.single(data[0,12])     # coluna M: gamas
 Nad = np.single(data[0,13])       # coluna N: Nad
 Maxd = np.single(data[0,14])      # coluna O: Maxd
 #
-#
 # Final da entrada de dados
-
-"""
-################################################
-# dados iniciais de teste
-#   geometria da secao
-b   = 20
-h   = 40
-nc = 4
-nc1 = nc+1
-xc=np.zeros(nc1)
-xc[0] = 0
-xc[1] = b
-xc[2] = b
-xc[3] = 0
-xc[4] = 0
-
-yc=np.zeros(nc1)
-yc[0] = 0
-yc[1] = 0
-yc[2] = h
-yc[3] = h
-yc[4] = 0
-
-#   armaduras
-rj      = np.array([0.5, 0.5])
-As = 2*(np.pi*1.6**2/4)
-xs      = np.zeros(2)
-xs[0]   = 3.3
-xs[1]   = b-3.3
-
-ys=np.zeros(2)
-ys[0] = 3.3
-ys[1] = 3.3
-
-#   propriedades dos materiais
-fck  = 2     #kN/cm²
-nbar = 2
-Es   = 21000 #kN/cm²
-fyk  = 50    #kN/cm²
-
-#   coef. parciais NBR-6118
-gamac = 1.4
-gamas = 1.15
-
-#   solicitações
-Nad  = 0
-Maxd = -1.E4
-
-# teste seção t
-#del yc, xc
-#yc = np.array([0, 0, 10, 15, 95, 110, 120, 120, 110, 95, 15, 10, 0])
-#xc = np.array([22.5, 47.5, 47.5, 42.5, 42.5, 70, 70, 0, 0, 27.5, 27.5,
-#               22.5, 22.5])
-#"""
+#
 ################################################
 # cálculo das const. a1 e a2 para diag. par-retangulo
 fcd = fck/gamac
@@ -112,7 +59,7 @@ if fck<=50:
     a1    = 1000
     a2    = 250000
 else:
-    epsc2 = 0.002 + 0.000085*(fck-50)**0.53
+    epsc2 = 0.002 + 0.000085*(fck-50)**(0.53)
     epscu = 0.0026 + 0.035*((90-fck)/100)**4
     nn    = 1.4 + 23.4*((90-fck)/100)**4
     #
@@ -200,8 +147,8 @@ Variáveis:
     Es - módulo de def. longitudinal do aço
 """
 def esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, yg, ys):
-    YS = np.abs(np.max(yc))
-    YI = np.abs(np.min(ys))
+    YS = np.max(yc)
+    YI = np.min(ys)
     d  = YS-YI
     # calculo de epsilon S e epsilon I
     if X>(-1E50) and X<=((epscu*d)/(10/1000+epscu)):
@@ -220,7 +167,7 @@ def esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, 
     b = (epsS-epsI)/(YS-YI)
     c = epsS - b*YS
 
-    xx1, yy1, xx2, yy2 = poli(xc, yc, xg, yg, c, b, epsc2)
+    xx1, yy1, xx2, yy2 = poli(xc, yc, c, b, epsc2)
     Mrx1, Nr1 = reg1(a1, a2, c, b, fcd, xx1, yy1)
     Mrx2, Nr2 = reg2(fcd, xx2, yy2)
     
@@ -230,13 +177,7 @@ def esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, 
     Mrxd = Mrx1 + Mrx2 + Mrxas
     Nrd = Nr1 + Nr2 + Nras
     
-    #print(xx1, yy1)
-    #print(Mrx1, Nr1)
-    #print(Mrx2, Nr2)
-    #print(Mrxas, Nras)
-    #print (Mrxd, Nrd)
-    #print(epsS, epsI)
-    return (Mrxd, Nrd)
+    return (Mrxd, Nrd, epsS, epsI)
 #############################
 
 #############################
@@ -245,17 +186,19 @@ Função poli() retorna as variáveis xx1,yy1,xx2,yy2 que determinam
 as poligonais das regiões 1 e 2 da área comprimida da seção.
 Variáveis:
     xc, yc - vértices da seção em relação ao cg.
-    xg, yg - coord. do centroide
+    xx1, yy1, xx2, yy2 - vértices das poligonais das reg. 1 e 2
     c, b - variáveis de ajuste usadas em D0, D1 e D2
     epsc2 - def. específica c2 do diagrama parábola-retângulo 
             (NBR 6118:2014)
+    y01 - ordenada limite entre as regiões 0 e 1
+    y12 - ordenada limite entre as regiões 1 e 2
 
-Last-Modified: 02/07/2022
+Last-Modified: 17/07/2022
 Status: Ok - Testado para seções retangulares e T.
 """
-def poli(xc, yc, xg, yg, c, b, epsc2):
-    y01 = (-c/b)-yg
-    y12 = (-epsc2-c)/b-yg
+def poli(xc, yc, c, b, epsc2):
+    y01 = (-c/b)
+    y12 = (-epsc2-c)/b
 
     xx1 = np.copy(xc)
     yy1 = np.copy(yc)
@@ -314,7 +257,13 @@ def poli(xc, yc, xg, yg, c, b, epsc2):
 
 #############################
 """
+Função reg1() integra a região 1 de compressão do concreto, retornando momento
+e esforço normal resistente.
+Variáveis:
     D0, D1, D2 - coef. geométricos da seção p/ calc. das tensões no concreto
+    scd = sigma cd, tensão de cálculo do concreto
+    Mrx1, Nr1 - esforços resistentes da reg. 1
+    G00, G01, G02, G03 - polinômios de integração
 """
 def reg1(a1, a2, c, b, fcd, xx1, yy1):
     D0   = a1*c + a2*c**2
@@ -346,6 +295,14 @@ def reg1(a1, a2, c, b, fcd, xx1, yy1):
     return (Mrx1, Nr1)
 #############################
 #############################
+"""
+Função reg2() integra a região 2 de compressão do concreto, retornando momento
+e esforço normal resistente.
+Variáveis:
+    scd = sigma cd, tensão de cálculo do concreto
+    Mrx2, Nr2 - esforços resistentes da reg. 2
+    G00, G01, G02, G03 - polinômios de integração
+"""
 def reg2(fcd, xx2, yy2):
     scd  = 0.85*fcd
     Mrx2 = 0
@@ -368,6 +325,20 @@ def reg2(fcd, xx2, yy2):
     return (Mrx2, Nr2)
 #############################
 #############################
+"""
+Função aco() retorna a parcela resistente das armaduras da seção.
+Variáveis:
+    As - área total de aço
+    b,c - variáveis de ajuste
+    Nrasi - força normal na barra i
+    Nras, Mrxas - esforços resistentes do aço
+    sig - tensão na armadura
+    epsb - deformação específica da barra
+    fyd - resistência de projeto do aço
+    Es - módulo elástico do aço
+    rj - porcentagem de área de aço das armaduras
+    ys - ordenadas das armaduras em relação ao cg
+"""
 def aco(As, b, c, Es, fyd, rj, ys):
     Nras  = 0
     Mrxas = 0
@@ -383,6 +354,10 @@ def aco(As, b, c, Es, fyd, rj, ys):
         Mrxas = Mrxas + Nrasi*ys[i]
     return (Mrxas, Nras)
 #############################
+"""
+Função nlsistema() define o sistema de equações não lineares a ser solucionado, 
+a partir da chamada das demais funções
+"""
 
 def nlsistema(var, *var_aux):
     (X, lamb) = var
@@ -397,14 +372,58 @@ def nlsistema(var, *var_aux):
     Ly    = const[7]
     Maxd  = const[8]
     Nad   = const[9]
-    Mrxd, Nrd = esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk, gamas, Ly, rj, X, xc, xg, yc, yg, ys)
+    Mrxd, Nrd, epsS, epsI = esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk,
+                                  gamas, Ly, rj, X, xc, xg, yc, yg, ys)
     f = lamb*(Mrxd) - Maxd
     g = lamb*(Nrd) - Nad
     return[f,g]
 const = np.array([As, a1, a2, Es, fcd, fyk, gamas, Ly, Maxd, Nad])
-lambi = 0.5 #lambda inicial
-Xi = 0 #altura da LN inicial
-s0 = np.array([Xi, lambi])
+lamb_i = 1 #lambda inicial
+X_i = 0.5*Ly #altura da LN inicial
+s0 = np.array([X_i, lamb_i])
 var_aux = (const, epscu, epsc2, rj, xc, xg, yc, yg, ys)
-s  = fsolve(nlsistema, s0, var_aux)
-print(s)
+X, lamb  = fsolve(nlsistema, s0, var_aux)
+Mrxd, Nrd, epsS, epsI = esfor(As, a1, a2, Es, epscu, epsc2, fcd, fyk,
+                              gamas, Ly, rj, X, xc, xg, yc, yg, ys)
+FS = 1/lamb
+
+# Exportar resultados para Excel
+out = xlsxwriter.Workbook('saída.xlsx')
+worksheet = out.add_worksheet()
+lista = (
+    ['ESFORÇOS SOLICITANTES:',''],
+    ['NAd:', Nad],
+    ['Maxd:', Maxd],
+    ['',''],
+    ['ESFORÇOS RESISTENTES:', ''],
+    ['NRd:', Nrd],
+    ['MRxd:', Mrxd],
+    ['',''],
+    ['RESULTADOS:', ''],
+    ['Altura da LN:', X],
+    ['Fator de segurança:', FS],
+    ['Deformação na fibra superior: ', epsS],
+    ['Deformação na fibra inferior: ', epsI],
+)
+worksheet.set_column('B:B', 50)
+cell_format1 = out.add_format({'bold': True, 'font_size': 18, 'top': True, 'bottom': True})
+cell_format2 = out.add_format({'bold': True, 'italic': True ,'font_size': 12, 'top': True, 'bottom': True})
+cell_format3 = out.add_format({'font_size': 12, 'top': True, 'bottom': True})
+worksheet.write(1, 1, 'RELATÓRIO DE VERIFICAÇÃO DA SEÇÃO:', cell_format1)
+worksheet.write(1, 2, '', cell_format1)
+row=3
+col=1
+
+for i, j in (lista):
+    worksheet.write(row, col, i, cell_format2)
+    worksheet.write(row, col+1, j, cell_format3)
+    row += 1
+
+now = datetime.now()
+dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+worksheet.write(row+1, col, dt_string, cell_format3)
+worksheet.write(row+1, col+1, '', cell_format3)
+out.close()
+#
+
+print('X=', X, '\nFS=', FS, '\nMrxd=', Mrxd, '\nNrd=', Nrd)
